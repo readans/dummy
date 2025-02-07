@@ -1,18 +1,21 @@
 import React from "react"
 import Navigation from "../components/Navigation"
+import Sidebar from "../components/Sidebar"
 
 type Props = {
-  title: string,
   children: React.ReactNode
 }
 
-export default function AppLayout({ title, children }: Props) {
+export default function AppLayout({ children }: Props) {
   return (
     <>
-      <Navigation title={title}></Navigation>
-      <div className="max-w-7xl min-w-0 mx-auto">
-        {children}
-      </div>
+      <Navigation></Navigation>
+      <main>
+        <Sidebar />
+        <div className="ml-[300px] pb-6">
+          {children}
+        </div>
+      </main>
     </>
   )
 }
