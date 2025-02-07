@@ -1,0 +1,2 @@
+GET https://dummyapi.io/data/v1/user
+Authorization: 'X-API-KEY app-id:63473330c1927d386ca6a3a5'
