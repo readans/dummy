@@ -2,7 +2,7 @@
 
 Consumo de api dummy para realización de CRUD interactivo
 
-[](dummy-app.gif)
+![](./dummy-app.gif)
 
 ## Getting Started
 
