@@ -29,7 +29,7 @@ export const ThemeProvider: React.FC<Props> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    document.body.classList.toggle('dark', theme === 'dark');
+    document.querySelector('html')?.classList.toggle('dark', theme === 'dark')
   }, [theme]);
 
   const changeTheme = useCallback(() => {

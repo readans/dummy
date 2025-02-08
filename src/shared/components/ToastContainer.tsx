@@ -24,7 +24,7 @@ export default function ToastContainer() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 50 }}
-            className="flex items-center gap-4 px-4 py-3 bg-white dark:bg-gray-800 shadow-lg border-l-4"
+            className="flex items-center gap-4 px-4 py-3 bg-white dark:bg-[#282828] shadow-lg border-l-4"
             style={{
               borderColor:
                 toast.type === "success"
@@ -38,14 +38,14 @@ export default function ToastContainer() {
           >
             {icons[toast.type]}
             <div className="">
-              <h6 className="font-semibold">{toast.type}</h6>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
+              <h6 className="font-semibold dark:text-white uppercase">{toast.type}</h6>
+              <p className="text-sm font-medium text-gray-800 dark:text-neutral-400">
                 {toast.message}
               </p>
             </div>
             <button
               onClick={() => removeToast(toast.id)}
-              className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer self-start"
+              className="ml-auto text-gray-400 dark:text-neutral-400 hover:text-neutral-400 dark:hover:text-white cursor-pointer self-start"
             >
               ✖
             </button>

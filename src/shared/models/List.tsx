@@ -1,4 +1,4 @@
-export interface Pagination<T> {
+export interface List<T> {
   data: T[];
   total: number;
   page: number;

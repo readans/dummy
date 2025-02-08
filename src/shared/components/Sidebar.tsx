@@ -1,6 +1,5 @@
 import { Link } from "wouter"
 import UserIcon from "./icons/UserIcon"
-import VercelIcon from "./icons/VercelIcon"
 import MessageIcon from "./icons/MessageIcon"
 import MessagesIcon from "./icons/MessagesIcon"
 
@@ -20,11 +19,6 @@ const links: Link[] = [
     name: "Posts",
     href: "/posts",
     icon: <MessageIcon />
-  },
-  {
-    name: "Comments",
-    href: "/comments",
-    icon: <MessagesIcon />
   },
 ]
 

@@ -1,9 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChangeEvent, useEffect, useMemo, useState } from "react"
-import { Title, User } from "../../shared/models/User";
-import { createUser, deleteUser, fetchUsers, updateUser } from "../../shared/services/api";
-import { CreateUser } from "../../shared/models/CreateUser";
-import { UpdateUser } from "../../shared/models/UpdateUser";
+import { ChangeEvent, useEffect, useState } from "react"
 import AppLayout from "../../shared/layouts/AppLayout";
 import TrashIcon from "../../shared/components/icons/TrashIcon";
 import EditIcon from "../../shared/components/icons/EditIcon";
@@ -12,8 +8,28 @@ import Modal from "../../shared/components/Modal";
 import SearchIcon from "../../shared/components/icons/SearchIcon";
 import CirclePlusIcon from "../../shared/components/icons/CirclePlusIcon";
 import { useToast } from "../../shared/hooks/useToast";
+import { createUser, deleteUser, getUserList, updateUser } from "../../shared/services/users";
+import { List } from "../../shared/models/List";
+import { CreateUserDto, UpdateUserDto } from "../../shared/models/UserDto";
+import UserForm from "../components/UserForm";
+import { UserPreview } from "../../shared/models/User";
+import ConfirmModal from "../../shared/components/ConfirmModal";
+import PencilIcon from "../../shared/components/icons/PencilIcon";
+import { motion } from 'framer-motion'
+import DetailedForm from "../components/DetailedForm";
+import TableSkeleton from "../components/TableSkeleton";
+import Pagination from "../../shared/components/Pagination";
 
-const initialState: User = {
+type ParamsQuery = {
+  limit: number,
+  page: number,
+}
+
+type UserFormType = Record<string, any>;
+
+type AvailableModals = "create" | "edit" | "detail" | "confirm";
+
+const initialState: UserPreview = {
   id: "",
   title: "",
   firstName: "",
@@ -21,87 +37,91 @@ const initialState: User = {
   picture: "",
 }
 
-type UserFormType = Record<string, any>;
 export default function Users() {
 
-  const [modals, setModals] = useState({
-    create: false,
-    detail: false,
-    edit: false,
-  })
-
+  const [modals, setModals] = useState<AvailableModals[]>([])
   const [userForm, setUserForm] = useState<UserFormType>(initialState);
-
   const [searchId, setSearchId] = useState("");
+  const [selectedUser, setSelectedUser] = useState({} as UserPreview);
+  const [paramsQuery, setParamsQuery] = useState<ParamsQuery>({ limit: 10, page: 0 })
 
   const { addToast } = useToast();
 
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, refetch } = useQuery<List<UserPreview>>({
     queryKey: ["getUsers"],
-    queryFn: fetchUsers,
-    select: (data) => searchId == "" ? data : data.filter(u => u.id.startsWith(searchId))
+    queryFn: () => getUserList(paramsQuery),
+    select: (data) => searchId == "" ? data : ({ ...data, data: data.data.filter(u => u.id.startsWith(searchId)) }),
   })
 
-  const mutation = useMutation({
-    mutationFn: (id: string) => {
-      return deleteUser(id)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['getUsers'] })
-    },
-  })
+  useEffect(() => {
+    refetch()
+  }, [paramsQuery])
 
   const createMutation = useMutation({
-    mutationFn: (dto: CreateUser) => {
+    mutationFn: (dto: CreateUserDto) => {
       return createUser(dto)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['getUsers'] })
       addToast("Usuario creado exitósamente", "success")
     },
-    onError: () => {
-      addToast("Error al crear el usuario", "error")
+    onError: (e: Error) => {
+      addToast(e.message, "error")
     }
   })
 
   const updateMutation = useMutation({
-    mutationFn: (user: User) => {
-      const dto: UpdateUser = {
-        title: user.title,
-        firstName: user.firstName,
-        lastName: user.lastName
-      }
-      return updateUser(user.id, dto)
+    mutationFn: ({ dto, id }: { dto: UpdateUserDto, id: string }) => {
+      return updateUser(dto, id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['getUsers'] })
+      addToast("Usuario actualizado exitósamente", "success")
+    },
+    onError: (e: Error) => {
+      addToast(e.message, "error")
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => {
+      return deleteUser(id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['getUsers'] })
+      addToast("Usuario eliminado exitósamente", "success")
+    },
+    onError: (e: Error) => {
+      addToast(e.message, "error")
     }
   })
 
   const handleCreate = () => {
-    const dto: CreateUser = {
-      title: userForm.title as Title,
+    const dto: CreateUserDto = {
+      title: userForm.title,
       email: userForm.email as string,
       firstName: userForm.firstName as string,
       lastName: userForm.lastName as string
     }
-    console.log("dto: ", dto)
     createMutation.mutate(dto)
-    setModals(value => ({ ...value, create: false }))
+    setModals([])
   }
 
   const handleUpdate = () => {
-    const user: User = {
-      id: userForm.id,
+    const dto: UpdateUserDto = {
       title: userForm.title,
       firstName: userForm.firstName,
       lastName: userForm.lastName,
-      picture: userForm.picture
     }
-    updateMutation.mutate(user)
-    setModals(value => ({ ...value, edit: false }))
+    updateMutation.mutate({ dto, id: userForm.id })
+    setModals([])
+  }
+
+  const handleDelete = () => {
+    deleteMutation.mutate(selectedUser.id)
+    setModals([])
   }
 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -123,7 +143,7 @@ export default function Users() {
           <div className="flex justify-end gap-4 mb-6">
             <button className="px-6 py-3 flex items-center gap-4 bg-[#262626] text-white rounded-md hover:cursor-pointer hover:bg-[#222222]" onClick={() => {
               setUserForm(initialState);
-              setModals(prev => ({ ...prev, create: true }))
+              setModals(["create"])
             }}>
               <span>Crear</span>
               <CirclePlusIcon />
@@ -131,118 +151,99 @@ export default function Users() {
           </div>
 
           {!isLoading ? (
-
-            <div className="relative overflow-x-auto shadow-md">
-              <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-neutral-400">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-[#222222] dark:text-white">
-                  <tr>
-                    <th scope="col" className="px-6 py-3">Id</th>
-                    <th scope="col" className="px-6 py-3">Nombres y apellidos</th>
-                    <th scope="col" className="px-6 py-3">Foto</th>
-                    <th scope="col" className="px-6 py-3">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-
-                  {data?.map(user => (
-
-                    <tr key={user.id} className="bg-white border-b dark:bg-[#282828] dark:border-neutral-400 border-gray-200 hover:bg-gray-50 dark:hover:bg-[#222222] last:border-none">
-                      <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">{user.id}</th>
-                      <td className="px-6 py-4">{`${user.firstName} ${user.lastName}`}</td>
-                      <td className="px-6 py-4">
-                        <div className="">
-                          <img className="size-10 rounded-full" src={user.picture} alt="" />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="inline-flex items-center gap-4">
-                          <TrashIcon className="size-5 cursor-pointer" onClick={() => mutation.mutate(user.id)} />
-                          <EditIcon className="size-5 cursor-pointer" onClick={() => {
-                            setUserForm(user)
-                            setModals(prev => ({ ...prev, edit: true }))
-                          }} />
-                          <ClipboardTextIcon className="size-5 cursor-pointer" onClick={() => {
-                            setUserForm(user)
-                            setModals(prev => ({ ...prev, detail: true }))
-                          }} />
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                  )}
-
-                </tbody>
-              </table>
-            </div>
-          ) : (
             <>
-              Loading...
+              <div className="relative overflow-x-auto shadow-md">
+                <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-neutral-400">
+                  <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-[#222222] dark:text-white">
+                    <tr>
+                      <th scope="col" className="px-6 py-3">Id</th>
+                      <th scope="col" className="px-6 py-3">Nombres y apellidos</th>
+                      <th scope="col" className="px-6 py-3">Foto</th>
+                      <th scope="col" className="px-6 py-3">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+
+                    {data?.data.map(user => (
+
+                      <tr key={user.id} className="bg-white border-b dark:bg-[#161616] dark:border-neutral-800 border-gray-200 hover:bg-gray-50 dark:hover:bg-neutral-800/20 last:border-none">
+                        <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">{user.id}</th>
+                        <td className="px-6 py-4">{`${user.firstName} ${user.lastName}`}</td>
+                        <td className="px-6 py-4">
+                          <div className="">
+                            {/* <img className="" src={user.picture} alt="" /> */}
+                            <motion.img
+                              src={user.picture}
+                              alt="Thumbnail"
+                              layoutId={`image-transition-${user.id}`}
+                              className="size-10 rounded-full"
+                            />
+
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="inline-flex items-center gap-4">
+                            <TrashIcon className="size-5 cursor-pointer" onClick={() => {
+                              setSelectedUser(user)
+                              setModals(['confirm'])
+                            }} />
+                            <EditIcon className="size-5 cursor-pointer" onClick={() => {
+                              setUserForm(user)
+                              setModals(["edit"])
+                            }} />
+                            <ClipboardTextIcon className="size-5 cursor-pointer" onClick={() => {
+                              setUserForm(user)
+                              setModals(["detail"])
+                            }} />
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                    )}
+
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end">
+                {data && (
+                  <Pagination total={data.total} page={paramsQuery.page} limit={paramsQuery.limit} onPageChange={(num) => {
+                    setParamsQuery(value => ({ ...value, page: num }))
+                  }} />
+                )}
+              </div>
             </>
+          ) : (
+            <TableSkeleton />
           )}
 
 
         </div>
 
-        <Modal isOpen={modals.create}>
-          <div className="px-10 py-10">
-            <h4 className="mb-6 text-2xl font-semibold text-center">Crear Usuario</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <span>Title:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.title} onChange={handleChange} type="text" name="title" id="" />
-              <span>FirstName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.firstName} onChange={handleChange} type="text" name="firstName" id="" />
-              <span>LastName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.lastName} onChange={handleChange} type="text" name="lastName" id="" />
-              <span>Email:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.email} onChange={handleChange} type="text" name="email" id="" />
-              <div className=""></div>
-              <div className="flex gap-4 items-center">
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600 disabled:bg-blue-400 disabled:hover:bg-blue-400 disabled:cursor-default" onClick={handleCreate}>Guardar</button>
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600" onClick={() => setModals(prev => ({ ...prev, create: false }))}>Cancelar</button>
-              </div>
-            </div>
-          </div>
+        <Modal isOpen={modals.includes('create')}>
+          <UserForm
+            title="Crear Usuario"
+            icon={<CirclePlusIcon />}
+            form={userForm}
+            onChange={handleChange}
+            onConfirm={handleCreate} onCancel={() => setModals([])}
+          />
         </Modal>
 
-        <Modal isOpen={modals.detail}>
-          <div className="px-10 py-10">
-            <h4 className="mb-6 text-2xl font-semibold text-center">Detalle Usuario</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <span>Id:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.id} disabled type="text" name="" id="" />
-              <span>Title:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.title} disabled type="text" name="" id="" />
-              <span>FirstName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.firstName} disabled type="text" name="" id="" />
-              <span>LastName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.lastName} disabled type="text" name="" id="" />
-              <div className=""></div>
-              <div className="flex gap-4 items-center">
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600 disabled:bg-blue-400 disabled:hover:bg-blue-400 disabled:cursor-default" disabled>Guardar</button>
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600" onClick={() => setModals(prev => ({ ...prev, detail: false }))}>Cancelar</button>
-              </div>
-            </div>
-          </div>
+        <Modal isOpen={modals.includes("edit")}>
+          <UserForm
+            title="Editar Usuario"
+            icon={<PencilIcon />}
+            form={userForm}
+            onChange={handleChange}
+            onConfirm={handleUpdate} onCancel={() => setModals([])}
+          />
         </Modal>
 
-        <Modal isOpen={modals.edit}>
-          <div className="px-10 py-10">
-            <h4 className="mb-6 text-2xl font-semibold text-center">Editar Usuario</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <span>Title:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.title} onChange={handleChange} type="text" name="title" id="" />
-              <span>FirstName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.firstName} onChange={handleChange} type="text" name="firstName" id="" />
-              <span>LastName:</span>
-              <input className="px-4 py-2 outline-none border border-neutral-400 rounded-md disabled:bg-gray-100" value={userForm.lastName} onChange={handleChange} type="text" name="lastName" id="" />
-              <div className=""></div>
-              <div className="flex gap-4 items-center">
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600 disabled:bg-blue-400 disabled:hover:bg-blue-400 disabled:cursor-default" onClick={handleUpdate}>Guardar</button>
-                <button className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:cursor-pointer hover:bg-blue-600" onClick={() => setModals(prev => ({ ...prev, edit: false }))}>Cancelar</button>
-              </div>
-            </div>
-          </div>
+        <Modal isOpen={modals.includes("detail")}>
+          <DetailedForm title="Detalle Usuario" form={userForm} onCancel={() => setModals([])} />
         </Modal>
+
+        <ConfirmModal isOpen={modals.includes("confirm")} title="Eliminar Usuario" description="¿Estás seguro que quieres eliminar el usuario?" onConfirm={handleDelete} onCancel={() => setModals([])} />
 
       </>
     </AppLayout>
